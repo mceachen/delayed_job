@@ -17,7 +17,7 @@ module Delayed
     end
 
     def perform
-      object.send(method_name, *args) if object
+      object.send(method_name, *args) unless object.nil? or method_name.nil?
     end
 
     def method_missing(symbol, *args)
