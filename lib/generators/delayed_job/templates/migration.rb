@@ -11,11 +11,19 @@ class CreateDelayedJobs < ActiveRecord::Migration
       table.string   :locked_by                    # Who is working on this object (if locked)
       table.timestamps
     end
-	
+
     add_index :delayed_jobs, [:priority, :run_at], :name => 'delayed_jobs_priority'
+
+    create_table :delayed_job_prerequisites do |t|
+      t.integer :job_id
+      t.integer :prerequisite_job_id
+    end
+
+    add_index :delayed_job_prerequisites, [:job_id, :prerequisite_job_id], :unique => true
   end
-  
+
   def self.down
-    drop_table :delayed_jobs  
+    drop_table :delayed_job_prerequisites
+    drop_table :delayed_jobs
   end
 end

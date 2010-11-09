@@ -10,7 +10,26 @@ module Delayed
     end
 
     def method_missing(method, *args)
-      Job.enqueue({:payload_object => @payload_class.new(@target, method.to_sym, args)}.merge(@options))
+      options = {:payload_object => @payload_class.new(@target, method.to_sym, args)}.merge(@options)
+      # the priority is set to be the CONFIG default priority, and failing that the
+      # worker default priority
+      options[:priority] ||= begin
+        CONFIG["delayed_job"][method.to_s]
+      rescue Exception => e
+        nil
+      end || ::Delayed::Worker.default_priority
+      prerequisites = options.delete :prerequisites
+      job = nil
+      Job.transaction do
+        job = Job.create options
+        unless prerequisites.nil? or prerequisites.empty?
+          prerequisites.each do |prereq|
+            id = prereq.is_a?(Delayed::Backend::ActiveRecord::Job) ? prereq.id : prereq.to_i
+            job.prerequisites.create(:prerequisite_job_id => id) if id > 0
+          end
+        end
+      end
+      job
     end
   end
 

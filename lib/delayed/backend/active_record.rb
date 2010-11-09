@@ -17,15 +17,26 @@ end
 module Delayed
   module Backend
     module ActiveRecord
+      # If a job should only start after another set of jobs completes, it has "prerequisite" jobs.
+
+      class Prerequisite < ::ActiveRecord::Base
+        set_table_name :delayed_job_prerequisites
+        belongs_to :job, :class_name => "Delayed::Backend::ActiveRecord::Job"
+      end
+      
       # A job object that is persisted to the database.
       # Contains the work object as a YAML field.
       class Job < ::ActiveRecord::Base
         include Delayed::Backend::Base
         set_table_name :delayed_jobs
 
+        has_many :prerequisites, :class_name => "Delayed::Backend::ActiveRecord::Prerequisite"
+
         before_save :set_default_run_at
+        before_destroy :destroy_prerequisites
 
         scope :ready_to_run, lambda {|worker_name, max_run_time|
+          includes(:prerequisites).where(['(run_at <= ? AND (locked_at IS NULL OR locked_at < ?) OR locked_by = ?) AND failed_at IS NULL AND delayed_job_prerequisites.job_id IS NULL', db_time_now, db_time_now - max_run_time, worker_name])
           where(['(run_at <= ? AND (locked_at IS NULL OR locked_at < ?) OR locked_by = ?) AND failed_at IS NULL', db_time_now, db_time_now - max_run_time, worker_name])
         }
         scope :by_priority, order('priority ASC, run_at ASC')
@@ -52,6 +63,10 @@ module Delayed
           ::ActiveRecord::Base.silence do
             scope.by_priority.all(:limit => limit)
           end
+        end
+
+        def destroy_prerequisites
+          Delayed::Backend::ActiveRecord::Prerequisite.destroy_all(:prerequisite_job_id => id)
         end
 
         # Lock this job for this worker.
