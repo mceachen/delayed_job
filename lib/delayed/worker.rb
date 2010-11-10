@@ -125,7 +125,7 @@ module Delayed
       handle_failed_job(job, e)
       return false  # work failed
     ensure
-      logger.flush if logger and logger.respond_to? flush
+      logger.flush if logger and logger.respond_to?('flush')
     end
     
     # Reschedule the job in the future (when a job fails).
