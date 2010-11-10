@@ -1,6 +1,7 @@
 require 'rubygems'
 require 'daemons'
 require 'optparse'
+require 'active_support'
 
 module Delayed
   class Command
@@ -92,17 +93,17 @@ module Delayed
         end
       end
       
-      Delayed::Worker.logger = Logger.new(File.join(Rails.root, 'log', 'delayed_job.log'))
+      Delayed::Worker.logger = ActiveSupport::BufferedLogger.new(File.join(Rails.root, 'log', "#{worker_name or "delayed_job"}.log"))
       Delayed::Worker.backend.after_fork
       
       worker = Delayed::Worker.new(@options)
       worker.name_prefix = "#{worker_name} "
       worker.start
     rescue => e
-      Rails.logger.fatal e
+      # stderr first, so we emit something if Rails.logger has an issue.
       STDERR.puts e.message
+      Rails.logger.fatal e
       exit 1
     end
-    
   end
 end
