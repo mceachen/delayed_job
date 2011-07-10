@@ -12,6 +12,14 @@ It is a direct extraction from Shopify where the job table is responsible for a 
 * batch imports
 * spam checks
 
+h2. About this fork
+
+This fork adds the concept of intra-job dependencies, or "job prerequisites."
+
+If you need to support certain jobs starting only after other jobs have completed, you're in the right place.
+
+Please note that this has only been tested with ActiveRecord and MySQL.
+
 h2. Installation
 
 delayed_job 2.1 only supports Rails 3.0+. See the "2.0 branch":https://github.com/collectiveidea/delayed_job/tree/v2.0 for Rails 2.
@@ -92,6 +100,18 @@ class LongTasks
   end
   handle_asynchronously :call_an_instance_method, :priority => Proc.new {|i| i.how_important }
 end
+</pre>
+
+h2. Prerequisite Jobs
+
+Note that @.delay.method(params)@ returns a numeric job identifier.
+
+By providing an array of prerequisite job IDs to a delay call, you prevent that method from being invoked until the specified jobs have completed:
+
+<pre>
+prereqs = []
+prereqs << self.delay.method_a
+self.delay(:prerequisites=>prereqs).method_b
 </pre>
 
 h3. Rails 3 Mailers
