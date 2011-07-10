@@ -19,7 +19,7 @@ class CreateDelayedJobs < ActiveRecord::Migration
       t.integer :prerequisite_job_id
     end
 
-    add_index :delayed_job_prerequisites, [:job_id, :prerequisite_job_id], :unique => true
+    add_index :delayed_job_prerequisites, [:job_id, :prerequisite_job_id], :unique => true, :name => "index_delayed_job_prerequisites_job_prereq"
   end
 
   def self.down
