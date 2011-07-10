@@ -102,7 +102,7 @@ class LongTasks
 end
 </pre>
 
-h2. Prerequisite Jobs
+h3. Prerequisite Jobs
 
 Note that @.delay.method(params)@ returns a numeric job identifier.
 
