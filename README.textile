@@ -14,47 +14,24 @@ It is a direct extraction from Shopify where the job table is responsible for a 
 
 h2. Installation
 
-To install as a gem, add the following to @config/environment.rb@:
+delayed_job 2.1 only supports Rails 3.0+. See the "2.0 branch":https://github.com/collectiveidea/delayed_job/tree/v2.0 for Rails 2.
+
+To install, add delayed_job to your @Gemfile@ and run `bundle install`:
 
 <pre>
-config.gem 'delayed_job'
-</pre>
-
-Rake tasks are not automatically loaded from gems, so you'll need to add the following to your Rakefile:
-
-<pre>
-begin
-  require 'delayed/tasks'
-rescue LoadError
-  STDERR.puts "Run `rake gems:install` to install delayed_job"
-end
-</pre>
-
-To install as a plugin:
-
-<pre>
-script/plugin install git://github.com/collectiveidea/delayed_job.git
+gem 'delayed_job'
 </pre>
 
 After delayed_job is installed, you will need to setup the backend.
 
-h2. Rails
-
-As of delayed_job 2.1 it only supports Rails 3.0+.
-
-The 2.0.x gems work great with older versions of Rails, so check those out if you need them.
-
-
-h2. Backends
+h3. Backends
 
 delayed_job supports multiple backends for storing the job queue. "See the wiki for other backends":http://wiki.github.com/collectiveidea/delayed_job/backends besides Active Record.
-
-h3. Active Record
 
 The default is Active Record, which requires a jobs table.
 
 <pre>
-$ script/generate delayed_job
+$ script/rails generate delayed_job
 $ rake db:migrate
 </pre>
 
@@ -64,10 +41,10 @@ Call @.delay.method(params)@ on any object and it will be processed in the backg
 
 <pre>
 # without delayed_job
-Notifier.deliver_signup(@user)
+@user.activate!(@device)
 
 # with delayed_job
-Notifier.delay.deliver_signup @user
+@user.delay.activate!(@device)
 </pre>
 
 If a method should always be run in the background, you can call @#handle_asynchronously@ after the method declaration:
@@ -116,6 +93,20 @@ class LongTasks
   handle_asynchronously :call_an_instance_method, :priority => Proc.new {|i| i.how_important }
 end
 </pre>
+
+h3. Rails 3 Mailers
+
+Due to how mailers are implemented in Rails 3, we had to do a little work around to get delayed_job to work.
+
+<pre>
+# without delayed_job
+Notifier.signup(@user).deliver
+
+# with delayed_job
+Notifier.delay.signup(@user)
+</pre>
+
+Remove the @.deliver@ method to make it work. It's not ideal, but it's the best we could do for now.
 
 h2. Running Jobs
 
@@ -215,6 +206,8 @@ Delayed::Worker.destroy_failed_jobs = false. The failed jobs will be marked with
 
 By default all jobs are scheduled with priority = 0, which is top priority. You can change this by setting Delayed::Worker.default_priority to something else. Lower numbers have higher priority.
 
+It is possible to disable delayed jobs for testing purposes. Set Delayed::Worker.delay_jobs = false to execute all jobs realtime.
+
 Here is an example of changing job parameters in Rails:
 
 <pre>
@@ -223,7 +216,7 @@ Delayed::Worker.destroy_failed_jobs = false
 Delayed::Worker.sleep_delay = 60
 Delayed::Worker.max_attempts = 3
 Delayed::Worker.max_run_time = 5.minutes
-Delayed::Worker.log_queries = false # if you don't want the sql query to show up in your log every 5 secs
+Delayed::Worker.delay_jobs = !Rails.env.test?
 </pre>
 
 h3. Cleaning up
@@ -238,19 +231,13 @@ h2. How to contribute
 
 If you find what looks like a bug:
 
-# Check the GitHub issue tracker to see if anyone else has had the same issue.
-   http://github.com/collectiveidea/delayed_job/issues/
+# Search the "mailing list":http://groups.google.com/group/delayed_job to see if anyone else had the same issue.
+# Check the "GitHub issue tracker":http://github.com/collectiveidea/delayed_job/issues/ to see if anyone else has reported issue.
 # If you don't see anything, create an issue with information on how to reproduce it.
 
 If you want to contribute an enhancement or a fix:
 
 # Fork the project on github.
-   http://github.com/collectiveidea/delayed_job/
 # Make your changes with tests.
-# Commit the changes without making changes to the Rakefile, VERSION, or any other files that aren't related to your enhancement or fix
+# Commit the changes without making changes to the Rakefile or any other files that aren't related to your enhancement or fix
 # Send a pull request.
-
-h3. Changelog
-
-See http://wiki.github.com/collectiveidea/delayed_job/changelog for a list of changes.
-

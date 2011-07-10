@@ -1,8 +1,5 @@
 module Delayed
   module Backend
-    class DeserializationError < StandardError
-    end
-
     module Base
       def self.included(base)
         base.extend ClassMethods
@@ -13,22 +10,34 @@ module Delayed
         def enqueue(*args)
           options = {
             :priority => Delayed::Worker.default_priority
-          }
+          }.merge!(args.extract_options!)
 
-          if args.size == 1 && args.first.is_a?(Hash)
-            options.merge!(args.first)
-          else
-            options[:payload_object]  = args.shift
-            options[:priority]        = args.first || options[:priority]
-            options[:run_at]          = args[1]
+          options[:payload_object] ||= args.shift
+
+          if args.size > 0
+            warn "[DEPRECATION] Passing multiple arguments to `#enqueue` is deprecated. Pass a hash with :priority and :run_at."
+            options[:priority] = args.first || options[:priority]
+            options[:run_at]   = args[1]
           end
 
           unless options[:payload_object].respond_to?(:perform)
             raise ArgumentError, 'Cannot enqueue items which do not respond to perform'
           end
+          
+          if Delayed::Worker.delay_jobs
+            self.create(options).tap do |job|
+              job.hook(:enqueue)
+            end
+          else
+            options[:payload_object].perform
+          end
+        end
 
-          self.create(options).tap do |job|
-            job.hook(:enqueue)
+        def reserve(worker, max_run_time = Worker.max_run_time)
+          # We get up to 5 jobs from the db. In case we cannot get exclusive access to a job we try the next.
+          # this leads to a more even distribution of jobs across the worker processes
+          find_available(worker.name, 5, max_run_time).detect do |job|
+            job.lock_exclusively!(max_run_time, worker.name)
           end
         end
 
@@ -46,18 +55,19 @@ module Delayed
         end
       end
 
-      ParseObjectFromYaml = /\!ruby\/\w+\:([^\s]+)/
-
       def failed?
         failed_at
       end
       alias_method :failed, :failed?
 
+      ParseObjectFromYaml = /\!ruby\/\w+\:([^\s]+)/
+
       def name
-        @name ||= begin
-          payload = payload_object
-          payload.respond_to?(:display_name) ? payload.display_name : payload.class.name
-        end
+        @name ||= payload_object.respond_to?(:display_name) ?
+                    payload_object.display_name :
+                    payload_object.class.name
+      rescue DeserializationError
+        ParseObjectFromYaml.match(handler)[1]
       end
 
       def payload_object=(object)
@@ -67,9 +77,9 @@ module Delayed
 
       def payload_object
         @payload_object ||= YAML.load(self.handler)
-      rescue TypeError, LoadError, NameError => e
-          raise DeserializationError,
-            "Job failed to load: #{e.message}. Try to manually require the required file. Handler: #{handler.inspect}"
+      rescue TypeError, LoadError, NameError, ArgumentError => e
+        raise DeserializationError,
+          "Job failed to load: #{e.message}. Handler: #{handler.inspect}"
       end
 
       def invoke_job
@@ -94,12 +104,18 @@ module Delayed
           method = payload_object.method(name)
           method.arity == 0 ? method.call : method.call(self, *args)
         end
+      rescue DeserializationError
+        # do nothing
       end
 
       def reschedule_at
-        payload_object.respond_to?(:reschedule_at) ? 
+        payload_object.respond_to?(:reschedule_at) ?
           payload_object.reschedule_at(self.class.db_time_now, attempts) :
           self.class.db_time_now + (attempts ** 4) + 5
+      end
+      
+      def max_attempts
+        payload_object.max_attempts if payload_object.respond_to?(:max_attempts)
       end
       
     protected
