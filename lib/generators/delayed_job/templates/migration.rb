@@ -1,5 +1,5 @@
 class CreateDelayedJobs < ActiveRecord::Migration
-  def self.up
+  def change
     create_table :delayed_jobs, :force => true do |table|
       table.integer  :priority, :default => 0      # Allows some jobs to jump to the front of the queue
       table.integer  :attempts, :default => 0      # Provides for retries, but still fail eventually.
@@ -20,10 +20,5 @@ class CreateDelayedJobs < ActiveRecord::Migration
     end
 
     add_index :delayed_job_prerequisites, [:job_id, :prerequisite_job_id], :unique => true, :name => "index_delayed_job_prerequisites_job_prereq"
-  end
-
-  def self.down
-    drop_table :delayed_job_prerequisites
-    drop_table :delayed_jobs
   end
 end
